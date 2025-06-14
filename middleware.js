@@ -1,32 +1,34 @@
+// middleware.js
 import { NextResponse } from "next/server";
 
 export async function middleware(req) {
-  const pathname = req.nextUrl.pathname;
-  console.log("Processing path:", pathname);
+  const { pathname } = req.nextUrl;
 
+  // List of supported locales
   const locales = ["en", "hi", "mr", "ur", "ta", "bn", "gu"];
 
-  // Skip if already localized or API route
-  if (
-    locales.some(
-      (locale) =>
-        pathname === `/${locale}` || pathname.startsWith(`/${locale}/`)
-    ) ||
-    pathname.startsWith("/api")
-  ) {
-    console.log("Skipping localization for:", pathname);
-    return NextResponse.next();
+  // Check if the path starts with a supported locale
+  const pathLocale = locales.find(
+    (locale) => pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`
+  );
+
+  // If it's already a localized route or API route, skip
+  if (pathLocale || pathname.startsWith("/api")) {
+    const response = NextResponse.next();
+    // Still pass the IP header if available
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
+    response.headers.set("x-user-ip", ip);
+    return response;
   }
 
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
-  console.log("Detected IP:", ip);
-
+  // Only proceed with geo-detection for non-localized routes
   try {
-    // Try ipwho.is as alternative
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
+
     const geoRes = await fetch(`https://ipwho.is/${ip}`);
     const geoData = await geoRes.json();
-    console.log("Geo Data:", JSON.stringify(geoData, null, 2));
 
     if (!geoData.success) {
       throw new Error(geoData.message || "IP lookup failed");
@@ -51,19 +53,30 @@ export async function middleware(req) {
       countryLangMap[geoData.country_code] ||
       "en";
 
-    if (!locales.includes(lang)) {
-      console.log("Language not in supported locales, defaulting to English");
-      lang = "en";
-    }
+    if (!locales.includes(lang)) lang = "en";
 
-    console.log("Redirecting to language:", lang);
+    // Redirect to the detected language
     const url = req.nextUrl.clone();
-    url.pathname = `/${lang}${pathname === "/" ? "" : pathname}`;
+    url.pathname = `/${lang}${pathname}`;
     return NextResponse.redirect(url);
   } catch (error) {
-    console.error("Geo IP Lookup failed:", error.message);
-    const fallbackUrl = req.nextUrl.clone();
-    fallbackUrl.pathname = `/en${pathname}`;
-    return NextResponse.redirect(fallbackUrl);
+    console.error("Geo IP Lookup failed:", error);
+    // Fallback to English
+    const url = req.nextUrl.clone();
+    url.pathname = `/en${pathname}`;
+    return NextResponse.redirect(url);
   }
 }
+
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+  ],
+};

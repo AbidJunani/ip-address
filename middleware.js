@@ -1,82 +1,57 @@
-// middleware.js
 import { NextResponse } from "next/server";
 
-export async function middleware(req) {
-  const { pathname } = req.nextUrl;
+const locales = ["en", "hi", "mr", "ur", "ta", "bn", "gu"];
 
-  // List of supported locales
-  const locales = ["en", "hi", "mr", "ur", "ta", "bn", "gu"];
+export async function middleware(request) {
+  const { pathname } = request.nextUrl;
 
-  // Check if the path starts with a supported locale
-  const pathLocale = locales.find(
-    (locale) => pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`
-  );
-
-  // If it's already a localized route or API route, skip
-  if (pathLocale || pathname.startsWith("/api")) {
+  // Skip if already has a locale or is an API route
+  if (
+    locales.some(
+      (locale) =>
+        pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`
+    ) ||
+    pathname.startsWith("/api")
+  ) {
     const response = NextResponse.next();
-    // Still pass the IP header if available
+    // Add IP to header
     const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      "127.0.0.1";
     response.headers.set("x-user-ip", ip);
     return response;
   }
 
-  // Only proceed with geo-detection for non-localized routes
   try {
     const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      "127.0.0.1";
+    const response = await fetch(`https://ipwho.is/${ip}`);
+    const data = await response.json();
 
-    const geoRes = await fetch(`https://ipwho.is/${ip}`);
-    const geoData = await geoRes.json();
-
-    if (!geoData.success) {
-      throw new Error(geoData.message || "IP lookup failed");
-    }
-
-    const countryLangMap = {
-      IN: "hi", // India - Hindi
-      PK: "ur", // Pakistan - Urdu
-      BD: "bn", // Bangladesh - Bengali
-      LK: "ta", // Sri Lanka - Tamil
+    const langMap = {
+      // Country codes
+      IN: "hi",
+      PK: "ur",
+      BD: "bn",
+      LK: "ta",
+      // Region codes (India)
+      MH: "mr",
+      GJ: "gu",
+      TN: "ta",
+      WB: "bn",
     };
 
-    const regionLangMap = {
-      MH: "mr", // Maharashtra - Marathi
-      GJ: "gu", // Gujarat - Gujarati
-      TN: "ta", // Tamil Nadu - Tamil
-      WB: "bn", // West Bengal - Bengali
-    };
-
-    let lang =
-      regionLangMap[geoData.region_code] ||
-      countryLangMap[geoData.country_code] ||
-      "en";
-
+    let lang = langMap[data.region_code] || langMap[data.country_code] || "en";
     if (!locales.includes(lang)) lang = "en";
 
-    // Redirect to the detected language
-    const url = req.nextUrl.clone();
-    url.pathname = `/${lang}${pathname}`;
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(new URL(`/${lang}${pathname}`, request.url));
   } catch (error) {
-    console.error("Geo IP Lookup failed:", error);
-    // Fallback to English
-    const url = req.nextUrl.clone();
-    url.pathname = `/en${pathname}`;
-    return NextResponse.redirect(url);
+    console.error("GeoIP failed:", error);
+    return NextResponse.redirect(new URL("/en", request.url));
   }
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!_next|images|fonts|favicon.ico).*)"],
 };

@@ -22,12 +22,11 @@ const languageContent = {
 };
 
 const countryLangMap = {
-  IN: "hi", // India
-  US: "en", // USA
-  CA: "en", // Canada
-  FR: "fr", // France
-  DE: "en", // Germany (could use 'de' if added)
-  // Add more as needed...
+  IN: "hi",
+  US: "en",
+  CA: "en",
+  FR: "fr",
+  DE: "en",
 };
 
 export default function HomePage() {
@@ -36,7 +35,6 @@ export default function HomePage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Fetch IP & country info
     axios
       .get("https://ipwho.is/")
       .then((res) => {
@@ -57,6 +55,21 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
+      <div className="mb-4">
+        <label className="mr-2 font-medium">🌐 Select Language:</label>
+        <select
+          value={lang}
+          onChange={(e) => setLang(e.target.value)}
+          className="p-2 border rounded-md shadow-sm"
+        >
+          {Object.entries(languageContent).map(([code, text]) => (
+            <option key={code} value={code}>
+              {text.title}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <h1 className="text-3xl font-bold mb-2">{content.title}</h1>
       <p className="mb-6 text-lg">{content.message}</p>
 

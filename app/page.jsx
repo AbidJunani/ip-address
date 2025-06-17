@@ -120,12 +120,12 @@ export default function HomePage() {
       })
       .catch(() => setError("Network error while fetching IP info."))
       .finally(() => setLoading(false));
-  }, [lang]);
+  }, [lang]); // Add dependencies that are used inside fetchData
 
   useEffect(() => {
     fetchData();
     setUserAgent(navigator.userAgent);
-  }, [fetchData]);
+  }, [fetchData]); // Now we can safely add fetchData to dependencies
 
   useEffect(() => {
     if (ipInfo?.timezone?.utc) {
